@@ -1,0 +1,35 @@
+# Etapa 1: Instalar todas las dependencias (prod y dev)
+FROM node:20-slim AS deps
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps
+
+# Etapa 2: Build y Prisma
+FROM node:20-slim AS build
+
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+RUN npx prisma generate
+RUN npm run build
+
+# Etapa 3: Imagen final de producción (NO distroless)
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/prisma ./prisma
+COPY package.json ./
+
+# Copiamos el script de inicio
+COPY start.sh .
+
+RUN chmod +x start.sh
+
+EXPOSE 3001
+
+CMD ["./start.sh"]
