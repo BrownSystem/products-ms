@@ -421,8 +421,12 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     }
 
     // 5. Retornamos productos filtrados, reutilizando paginación original
+    const productosOrdenados = filteredProducts.sort(
+      (a, b) => a.inventory.stock - b.inventory.stock,
+    );
+
     return {
-      data: filteredProducts,
+      data: productosOrdenados,
       meta: paginatedProducts.meta,
     };
   }
