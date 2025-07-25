@@ -21,9 +21,9 @@ export declare class BrandsService extends PrismaClient implements OnModuleInit 
     } | null>;
     findOne(id: string): Promise<({
         products: {
-            code: string | null;
             description: string;
             id: string;
+            code: string | null;
         }[];
     } & {
         available: boolean;

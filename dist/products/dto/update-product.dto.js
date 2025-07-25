@@ -15,17 +15,10 @@ const create_product_dto_1 = require("./create-product.dto");
 const class_validator_1 = require("class-validator");
 class UpdateProductDto extends (0, mapped_types_1.PartialType)(create_product_dto_1.CreateProductDto) {
     id;
-    branchId;
 }
 exports.UpdateProductDto = UpdateProductDto;
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateProductDto.prototype, "id", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsUUID)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateProductDto.prototype, "branchId", void 0);
 //# sourceMappingURL=update-product.dto.js.map

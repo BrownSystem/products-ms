@@ -13,9 +13,9 @@ export declare class BrandsController {
     }>;
     findOne(id: string): Promise<({
         products: {
-            code: string | null;
             description: string;
             id: string;
+            code: string | null;
         }[];
     } & {
         available: boolean;

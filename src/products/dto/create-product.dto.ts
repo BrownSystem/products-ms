@@ -3,9 +3,6 @@ import { IsBoolean, IsString, IsOptional } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
-  public code: string;
-
-  @IsString()
   public description: string;
 
   @IsString()
@@ -15,10 +12,4 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   public available: boolean;
-
-  // @IsNumber({
-  //   maxDecimalPlaces: 4,
-  // })
-  // @Type(() => Number)
-  // public price: number;
 }

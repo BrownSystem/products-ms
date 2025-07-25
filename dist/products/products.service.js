@@ -30,7 +30,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
     logger = new common_1.Logger(ProductsService_1.name);
     _buildSearchQuery(search) {
         const where = { available: true };
-        if (search) {
+        if (search?.trim()) {
             const words = search.trim().split(/\s+/);
             where.AND = words.map((word) => ({
                 OR: [
@@ -72,14 +72,12 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
             try {
                 await this.create(product);
                 return {
-                    code: product.code,
                     message: '[BULK_CREATE] Product created successfully',
                     status: common_1.HttpStatus.CREATED,
                 };
             }
             catch (error) {
                 return {
-                    code: product.code,
                     message: '[BULK_CREATE] Error creating product',
                     error,
                     status: common_1.HttpStatus.BAD_REQUEST,
@@ -88,16 +86,18 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         })));
         return results;
     }
+    async generateNextProductCode() {
+        const lastProduct = await this.eProduct.findFirst({
+            orderBy: { code: 'desc' },
+            select: { code: true },
+        });
+        const lastCode = lastProduct?.code || '1000';
+        const nextCode = (parseInt(lastCode) + 1).toString();
+        return nextCode;
+    }
     async create(createProductDto) {
         try {
-            const { brandId, code, description, available } = createProductDto;
-            const existingProduct = await this.findByCode(code);
-            if (existingProduct) {
-                throw new microservices_1.RpcException({
-                    message: `[CREATE] Product with code ${code} already exists`,
-                    status: common_1.HttpStatus.BAD_REQUEST,
-                });
-            }
+            const { brandId, description, available } = createProductDto;
             if (brandId) {
                 const isBrand = await this.brandService.findOne(brandId);
                 if (!isBrand) {
@@ -107,10 +107,11 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                     });
                 }
             }
+            const code = await this.generateNextProductCode();
             const qrBase64 = await QRcode.toDataURL(code);
             const newProduct = await this.eProduct.create({
                 data: {
-                    code: code,
+                    code,
                     description: description,
                     available: available,
                     qrCode: qrBase64,
@@ -119,7 +120,6 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
             });
             const emitBranchMS = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'emit_create_branch_product' }, {
                 productId: newProduct.id,
-                colorCode: 'default',
                 stock: 0,
             }));
             return newProduct;
@@ -279,22 +279,19 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
     }
     async update(id, updateProductDto) {
         await this.findOne(id);
-        const { branchId, ...data } = updateProductDto;
-        if (typeof updateProductDto.available === 'boolean') {
-            if (!branchId) {
-                throw new microservices_1.RpcException('branchId es obligatorio para actualizar la disponibilidad.');
-            }
-            const command = updateProductDto.available
-                ? 'to_register_branch_product'
-                : 'de_registration_by_branch';
-            try {
-                const product = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: command }, { branchId, productId: id }));
-                return product;
-            }
-            catch (error) {
-                throw new common_1.BadRequestException(error?.message || 'Error al sincronizar con sucursal.');
-            }
+        const branches = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_all_branches' }, {}));
+        const stocks = await Promise.all(branches.map(async (branch) => {
+            const existingStock = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: id, branchId: branch.id }));
+            return existingStock.stock;
+        }));
+        const allZeroStock = stocks.every((stock) => stock === 0);
+        if (updateProductDto.available === false && !allZeroStock) {
+            throw new microservices_1.RpcException({
+                message: 'No se puede deshabilitar el producto porque hay stock disponible en alguna sucursal.',
+                status: common_1.HttpStatus.BAD_REQUEST,
+            });
         }
+        const { ...data } = updateProductDto;
         return this.eProduct.update({
             where: { id },
             data,
@@ -323,8 +320,54 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 message: `[SEARCH_PRODUCTS] No products found in branch ${branchId}`,
             });
         }
+        const productosOrdenados = filteredProducts.sort((a, b) => a.inventory.stock - b.inventory.stock);
         return {
-            data: filteredProducts,
+            data: productosOrdenados,
+            meta: paginatedProducts.meta,
+        };
+    }
+    async searchProductsWithAllBranchInventory(paginationDto) {
+        const { search } = paginationDto;
+        const where = this._buildSearchQuery(search);
+        const paginatedProducts = await (0, common_2.PaginateWithMeta)({
+            model: this.eProduct,
+            where,
+            pagination: paginationDto,
+        });
+        if (paginatedProducts.data.length === 0) {
+            throw new microservices_1.RpcException({
+                status: common_1.HttpStatus.NOT_FOUND,
+                message: '[SEARCH_PRODUCTS_ALL_BRANCHES] No products found',
+            });
+        }
+        const branches = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_all_branches' }, {}));
+        const enrichedProducts = await Promise.all(paginatedProducts.data.map(async (product) => {
+            const branchInventories = await Promise.all(branches.map(async (branch) => {
+                try {
+                    const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: product.id, branchId: branch.id }));
+                    return {
+                        branchId: branch.id,
+                        branchName: branch.name,
+                        stock: response?.stock ?? 0,
+                    };
+                }
+                catch {
+                    return {
+                        branchId: branch.id,
+                        branchName: branch.name,
+                        stock: null,
+                        error: 'Error al obtener stock',
+                    };
+                }
+            }));
+            const { qrCode, ...cleanProduct } = product;
+            return {
+                product: cleanProduct,
+                inventoryByBranch: branchInventories,
+            };
+        }));
+        return {
+            data: enrichedProducts,
             meta: paginatedProducts.meta,
         };
     }

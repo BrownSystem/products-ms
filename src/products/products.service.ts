@@ -12,7 +12,7 @@ import { PrismaClient } from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { BrandsService } from 'src/brands/brands.service';
 import { NATS_SERVICE } from 'src/config';
-import { firstValueFrom } from 'rxjs';
+import { first, firstValueFrom } from 'rxjs';
 import { PaginateWithMeta, PaginationDto } from 'src/common';
 import * as QRcode from 'qrcode';
 import * as PDFDocument from 'pdfkit';
@@ -25,8 +25,9 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   private _buildSearchQuery(search?: string) {
     const where: any = { available: true };
 
-    if (search) {
-      const words = search.trim().split(/\s+/); // Separa por espacios
+    if (search?.trim()) {
+      const words = search.trim().split(/\s+/);
+
       where.AND = words.map((word) => ({
         OR: [
           { code: { contains: word, mode: 'insensitive' } },
@@ -90,13 +91,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           try {
             await this.create(product);
             return {
-              code: product.code,
               message: '[BULK_CREATE] Product created successfully',
               status: HttpStatus.CREATED,
             };
           } catch (error) {
             return {
-              code: product.code,
               message: '[BULK_CREATE] Error creating product',
               error,
               status: HttpStatus.BAD_REQUEST,
@@ -109,18 +108,23 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     return results;
   }
 
+  async generateNextProductCode(): Promise<string> {
+    // Obtener el último producto creado (ordenado por código descendente)
+    const lastProduct = await this.eProduct.findFirst({
+      orderBy: { code: 'desc' },
+      select: { code: true },
+    });
+
+    const lastCode = lastProduct?.code || '1000'; // Punto de partida
+
+    const nextCode = (parseInt(lastCode) + 1).toString();
+
+    return nextCode;
+  }
+
   async create(createProductDto: CreateProductDto) {
     try {
-      const { brandId, code, description, available } = createProductDto;
-
-      const existingProduct = await this.findByCode(code);
-
-      if (existingProduct) {
-        throw new RpcException({
-          message: `[CREATE] Product with code ${code} already exists`,
-          status: HttpStatus.BAD_REQUEST,
-        });
-      }
+      const { brandId, description, available } = createProductDto;
 
       if (brandId) {
         const isBrand = await this.brandService.findOne(brandId);
@@ -132,11 +136,14 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         }
       }
 
+      // Generar código automáticamente
+      const code = await this.generateNextProductCode();
+
       const qrBase64 = await QRcode.toDataURL(code);
 
       const newProduct = await this.eProduct.create({
         data: {
-          code: code,
+          code,
           description: description,
           available: available,
           qrCode: qrBase64,
@@ -149,7 +156,6 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           { cmd: 'emit_create_branch_product' },
           {
             productId: newProduct.id,
-            colorCode: 'default',
             stock: 0,
           },
         ),
@@ -352,31 +358,36 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   async update(id: string, updateProductDto: UpdateProductDto) {
     await this.findOne(id);
 
-    const { branchId, ...data } = updateProductDto;
+    const branches = await firstValueFrom(
+      this.client.send({ cmd: 'find_all_branches' }, {}),
+    );
 
-    // Si se quiere cambiar la disponibilidad...
-    if (typeof updateProductDto.available === 'boolean') {
-      if (!branchId) {
-        throw new RpcException(
-          'branchId es obligatorio para actualizar la disponibilidad.',
+    // 🔁 Obtener los stocks de todas las sucursales
+    const stocks = await Promise.all(
+      branches.map(async (branch: any) => {
+        const existingStock = await firstValueFrom(
+          this.client.send(
+            { cmd: 'find_one_product_branch_id' },
+            { productId: id, branchId: branch.id },
+          ),
         );
-      }
+        return existingStock.stock;
+      }),
+    );
 
-      const command = updateProductDto.available
-        ? 'to_register_branch_product'
-        : 'de_registration_by_branch';
+    const allZeroStock = stocks.every((stock) => stock === 0);
 
-      try {
-        const product = await firstValueFrom(
-          this.client.send({ cmd: command }, { branchId, productId: id }),
-        );
-        return product;
-      } catch (error) {
-        throw new BadRequestException(
-          error?.message || 'Error al sincronizar con sucursal.',
-        );
-      }
+    // 💡 Si quiere deshabilitarlo (available = false), y hay stock > 0, lanzar error
+    if (updateProductDto.available === false && !allZeroStock) {
+      throw new RpcException({
+        message:
+          'No se puede deshabilitar el producto porque hay stock disponible en alguna sucursal.',
+        status: HttpStatus.BAD_REQUEST,
+      });
     }
+
+    // 📦 Actualizar normalmente
+    const { ...data } = updateProductDto;
 
     return this.eProduct.update({
       where: { id },
@@ -427,6 +438,74 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
     return {
       data: productosOrdenados,
+      meta: paginatedProducts.meta,
+    };
+  }
+
+  async searchProductsWithAllBranchInventory(paginationDto: PaginationDto) {
+    const { search } = paginationDto;
+    // 1. Filtro base
+    const where = this._buildSearchQuery(search);
+
+    // 2. Paginación de productos
+    const paginatedProducts = await PaginateWithMeta({
+      model: this.eProduct,
+      where,
+      pagination: paginationDto,
+    });
+
+    if (paginatedProducts.data.length === 0) {
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: '[SEARCH_PRODUCTS_ALL_BRANCHES] No products found',
+      });
+    }
+
+    // 3. Obtener todas las sucursales disponibles
+    const branches = await firstValueFrom(
+      this.client.send({ cmd: 'find_all_branches' }, {}),
+    );
+
+    // 4. Para cada producto, obtener inventario por sucursal
+    const enrichedProducts = await Promise.all(
+      paginatedProducts.data.map(async (product) => {
+        const branchInventories = await Promise.all(
+          branches.map(async (branch) => {
+            try {
+              const response = await firstValueFrom(
+                this.client.send(
+                  { cmd: 'find_one_product_branch_id' },
+                  { productId: product.id, branchId: branch.id },
+                ),
+              );
+
+              return {
+                branchId: branch.id,
+                branchName: branch.name,
+                stock: response?.stock ?? 0,
+              };
+            } catch {
+              return {
+                branchId: branch.id,
+                branchName: branch.name,
+                stock: null,
+                error: 'Error al obtener stock',
+              };
+            }
+          }),
+        );
+
+        const { qrCode, ...cleanProduct } = product;
+        return {
+          product: cleanProduct,
+          inventoryByBranch: branchInventories,
+        };
+      }),
+    );
+
+    // 5. Retorno estructurado con meta
+    return {
+      data: enrichedProducts,
       meta: paginatedProducts.meta,
     };
   }

@@ -40,6 +40,15 @@ export class ProductsController {
     return this.productsService.searchProducts(paginationDto);
   }
 
+  @MessagePattern({ cmd: 'search_products_with_all_branch_inventory' })
+  searchProductsWithAllBranchInventory(
+    @Payload() paginationDto: PaginationDto,
+  ) {
+    return this.productsService.searchProductsWithAllBranchInventory(
+      paginationDto,
+    );
+  }
+
   @MessagePattern({ cmd: 'find_all_product' })
   findAll(@Payload() paginationDto: PaginationDto) {
     return this.productsService.findAll(paginationDto);

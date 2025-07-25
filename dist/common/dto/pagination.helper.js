@@ -10,7 +10,7 @@ function applyPagination(query) {
         include,
         select,
         orderBy,
-        skip: (offset - 1) * limit,
+        skip: Math.max((offset - 1) * limit, 0),
         take: limit,
     });
 }

@@ -41,6 +41,9 @@ let ProductsController = class ProductsController {
     search(paginationDto) {
         return this.productsService.searchProducts(paginationDto);
     }
+    searchProductsWithAllBranchInventory(paginationDto) {
+        return this.productsService.searchProductsWithAllBranchInventory(paginationDto);
+    }
     findAll(paginationDto) {
         return this.productsService.findAll(paginationDto);
     }
@@ -86,6 +89,13 @@ __decorate([
     __metadata("design:paramtypes", [common_2.PaginationDto]),
     __metadata("design:returntype", void 0)
 ], ProductsController.prototype, "search", null);
+__decorate([
+    (0, microservices_1.MessagePattern)({ cmd: 'search_products_with_all_branch_inventory' }),
+    __param(0, (0, microservices_1.Payload)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [common_2.PaginationDto]),
+    __metadata("design:returntype", void 0)
+], ProductsController.prototype, "searchProductsWithAllBranchInventory", null);
 __decorate([
     (0, microservices_1.MessagePattern)({ cmd: 'find_all_product' }),
     __param(0, (0, microservices_1.Payload)()),

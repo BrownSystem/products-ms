@@ -7,12 +7,10 @@ export declare class ProductsController {
     constructor(productsService: ProductsService);
     create(createProductDto: CreateProductDto): Promise<any>;
     uploadWithFile(rows: CreateProductDto[]): Promise<({
-        code: string;
         message: string;
         status: import("@nestjs/common").HttpStatus;
         error?: undefined;
     } | {
-        code: string;
         message: string;
         error: any;
         status: import("@nestjs/common").HttpStatus;
@@ -29,15 +27,23 @@ export declare class ProductsController {
             lastPage: number;
         };
     }>;
+    searchProductsWithAllBranchInventory(paginationDto: PaginationDto): Promise<{
+        data: any[];
+        meta: {
+            total: any;
+            page: number;
+            lastPage: number;
+        };
+    }>;
     findAll(paginationDto: PaginationDto): Promise<{
         data: {
             stock: number;
-            id: string;
-            code: string | null;
             description: string;
             available: boolean;
+            id: string;
             createdAt: Date;
             updatedAt: Date;
+            code: string | null;
             qrCode: string | null;
             brand: {
                 name: string;
@@ -60,27 +66,36 @@ export declare class ProductsController {
         pageSize: number;
     }>;
     findOne(id: string): Promise<{
-        id: string;
-        code: string | null;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
         qrCode: string | null;
-        brandId: string | null;
     } | {
         message: string;
         status: import("@nestjs/common").HttpStatus;
     }>;
-    update(updateProductDto: UpdateProductDto): Promise<any>;
-    validateProducts(ids: string[]): Promise<{
-        id: string;
-        code: string | null;
+    update(updateProductDto: UpdateProductDto): Promise<{
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
         qrCode: string | null;
+    }>;
+    validateProducts(ids: string[]): Promise<{
+        description: string;
         brandId: string | null;
+        available: boolean;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        code: string | null;
+        qrCode: string | null;
     }[]>;
 }

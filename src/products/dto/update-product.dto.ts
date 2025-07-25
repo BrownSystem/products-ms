@@ -5,9 +5,4 @@ import { IsOptional, IsString, IsUUID } from 'class-validator';
 export class UpdateProductDto extends PartialType(CreateProductDto) {
   @IsString()
   id: string;
-
-  @IsString()
-  @IsUUID()
-  @IsOptional()
-  branchId: string;
 }
