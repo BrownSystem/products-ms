@@ -23,7 +23,7 @@ export declare class BrandsService extends PrismaClient implements OnModuleInit 
         products: {
             description: string;
             id: string;
-            code: string | null;
+            code: number;
         }[];
     } & {
         available: boolean;

@@ -30,7 +30,7 @@ export class ProductsController {
 
   @MessagePattern({ cmd: 'generate_pdf_file_with_qrs' })
   generatePdfFileWithQrs(
-    @Payload() productsWithQty: { code: string; quantity: number }[],
+    @Payload() productsWithQty: { code: number; quantity: number }[],
   ) {
     return this.productsService.generateQrsPdf(productsWithQty);
   }
@@ -72,5 +72,10 @@ export class ProductsController {
   @MessagePattern({ cmd: 'validate_products' })
   validateProducts(@Payload() ids: string[]) {
     return this.productsService.validateProducts(ids);
+  }
+
+  @MessagePattern({ cmd: 'delete-all-products' })
+  deleteAll() {
+    return this.productsService.deleteProducts();
   }
 }

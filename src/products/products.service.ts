@@ -28,12 +28,17 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     if (search?.trim()) {
       const words = search.trim().split(/\s+/);
 
-      where.AND = words.map((word) => ({
-        OR: [
-          { code: { contains: word, mode: 'insensitive' } },
+      where.AND = words.map((word) => {
+        const filters: any[] = [
           { description: { contains: word, mode: 'insensitive' } },
-        ],
-      }));
+        ];
+
+        if (!isNaN(Number(word))) {
+          filters.push({ code: { equals: Number(word) } });
+        }
+
+        return { OR: filters };
+      });
     }
 
     return where;
@@ -108,20 +113,6 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     return results;
   }
 
-  async generateNextProductCode(): Promise<string> {
-    // Obtener el último producto creado (ordenado por código descendente)
-    const lastProduct = await this.eProduct.findFirst({
-      orderBy: { code: 'desc' },
-      select: { code: true },
-    });
-
-    const lastCode = lastProduct?.code || '1000'; // Punto de partida
-
-    const nextCode = (parseInt(lastCode) + 1).toString();
-
-    return nextCode;
-  }
-
   async create(createProductDto: CreateProductDto) {
     try {
       const { brandId, description, available } = createProductDto;
@@ -136,22 +127,15 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         }
       }
 
-      // Generar código automáticamente
-      const code = await this.generateNextProductCode();
-
-      const qrBase64 = await QRcode.toDataURL(code);
-
       const newProduct = await this.eProduct.create({
         data: {
-          code,
-          description: description,
-          available: available,
-          qrCode: qrBase64,
-          brandId: brandId,
+          description,
+          available,
+          brandId,
         },
       });
 
-      const emitBranchMS = await firstValueFrom(
+      await firstValueFrom(
         this.client.send(
           { cmd: 'emit_create_branch_product' },
           {
@@ -160,6 +144,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           },
         ),
       );
+
       return newProduct;
     } catch (error) {
       return error;
@@ -167,7 +152,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async generateQrsPdf(
-    productsWithQty: { code: string; quantity: number }[],
+    productsWithQty: { code: number; quantity: number }[],
   ): Promise<string> {
     const codes = productsWithQty.map((p) => p.code);
 
@@ -344,7 +329,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     }
   }
 
-  async findByCode(code: string, throwIfNotFound = false) {
+  async findByCode(code: number, throwIfNotFound = false) {
     const product = await this.eProduct.findFirst({ where: { code } });
     if (!product && throwIfNotFound) {
       throw new RpcException({
@@ -531,5 +516,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     }
 
     return product;
+  }
+
+  async deleteProducts() {
+    const products = await this.eProduct.deleteMany();
+    return products;
   }
 }

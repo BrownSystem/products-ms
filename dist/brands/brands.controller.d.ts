@@ -15,7 +15,7 @@ export declare class BrandsController {
         products: {
             description: string;
             id: string;
-            code: string | null;
+            code: number;
         }[];
     } & {
         available: boolean;

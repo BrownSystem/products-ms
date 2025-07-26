@@ -21,7 +21,6 @@ const brands_service_1 = require("../brands/brands.service");
 const config_1 = require("../config");
 const rxjs_1 = require("rxjs");
 const common_2 = require("../common");
-const QRcode = require("qrcode");
 const PDFDocument = require("pdfkit");
 const p_limit_1 = require("p-limit");
 let ProductsService = ProductsService_1 = class ProductsService extends client_1.PrismaClient {
@@ -32,12 +31,15 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         const where = { available: true };
         if (search?.trim()) {
             const words = search.trim().split(/\s+/);
-            where.AND = words.map((word) => ({
-                OR: [
-                    { code: { contains: word, mode: 'insensitive' } },
+            where.AND = words.map((word) => {
+                const filters = [
                     { description: { contains: word, mode: 'insensitive' } },
-                ],
-            }));
+                ];
+                if (!isNaN(Number(word))) {
+                    filters.push({ code: { equals: Number(word) } });
+                }
+                return { OR: filters };
+            });
         }
         return where;
     }
@@ -86,15 +88,6 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         })));
         return results;
     }
-    async generateNextProductCode() {
-        const lastProduct = await this.eProduct.findFirst({
-            orderBy: { code: 'desc' },
-            select: { code: true },
-        });
-        const lastCode = lastProduct?.code || '1000';
-        const nextCode = (parseInt(lastCode) + 1).toString();
-        return nextCode;
-    }
     async create(createProductDto) {
         try {
             const { brandId, description, available } = createProductDto;
@@ -107,18 +100,14 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                     });
                 }
             }
-            const code = await this.generateNextProductCode();
-            const qrBase64 = await QRcode.toDataURL(code);
             const newProduct = await this.eProduct.create({
                 data: {
-                    code,
-                    description: description,
-                    available: available,
-                    qrCode: qrBase64,
-                    brandId: brandId,
+                    description,
+                    available,
+                    brandId,
                 },
             });
-            const emitBranchMS = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'emit_create_branch_product' }, {
+            await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'emit_create_branch_product' }, {
                 productId: newProduct.id,
                 stock: 0,
             }));
@@ -387,6 +376,10 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
             });
         }
         return product;
+    }
+    async deleteProducts() {
+        const products = await this.eProduct.deleteMany();
+        return products;
     }
 };
 exports.ProductsService = ProductsService;

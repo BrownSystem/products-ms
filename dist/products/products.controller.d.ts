@@ -16,7 +16,7 @@ export declare class ProductsController {
         status: import("@nestjs/common").HttpStatus;
     })[]>;
     generatePdfFileWithQrs(productsWithQty: {
-        code: string;
+        code: number;
         quantity: number;
     }[]): Promise<string>;
     search(paginationDto: PaginationDto): Promise<{
@@ -38,12 +38,12 @@ export declare class ProductsController {
     findAll(paginationDto: PaginationDto): Promise<{
         data: {
             stock: number;
+            id: string;
+            code: number;
             description: string;
             available: boolean;
-            id: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string | null;
             qrCode: string | null;
             brand: {
                 name: string;
@@ -66,36 +66,37 @@ export declare class ProductsController {
         pageSize: number;
     }>;
     findOne(id: string): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: string | null;
         qrCode: string | null;
+        brandId: string | null;
     } | {
         message: string;
         status: import("@nestjs/common").HttpStatus;
     }>;
     update(updateProductDto: UpdateProductDto): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: string | null;
         qrCode: string | null;
+        brandId: string | null;
     }>;
     validateProducts(ids: string[]): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: string | null;
         qrCode: string | null;
+        brandId: string | null;
     }[]>;
+    deleteAll(): Promise<import(".prisma/client").Prisma.BatchPayload>;
 }
