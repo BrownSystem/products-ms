@@ -145,9 +145,18 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         ),
       );
 
-      return newProduct;
+      const code = `${newProduct.code} - ${newProduct.description}`;
+
+      const qrCodeDataUrl = await QRcode.toDataURL(code);
+
+      const updatedProduct = await this.eProduct.update({
+        where: { id: newProduct.id },
+        data: { qrCode: qrCodeDataUrl },
+      });
+
+      return updatedProduct;
     } catch (error) {
-      return error;
+      throw error;
     }
   }
 
