@@ -23,14 +23,14 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
         status: HttpStatus;
     })[]>;
     create(createProductDto: CreateProductDto): Promise<{
-        id: string;
-        code: number;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: number;
         qrCode: string | null;
-        brandId: string | null;
     }>;
     generateQrsPdf(productsWithQty: {
         code: number;
@@ -43,12 +43,12 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
     findAll(paginationDto: PaginationDto): Promise<{
         data: {
             stock: number;
-            id: string;
-            code: number;
             description: string;
             available: boolean;
+            id: string;
             createdAt: Date;
             updatedAt: Date;
+            code: number;
             qrCode: string | null;
             brand: {
                 name: string;
@@ -71,37 +71,37 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
         pageSize: number;
     }>;
     findOne(id: string): Promise<{
-        id: string;
-        code: number;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: number;
         qrCode: string | null;
-        brandId: string | null;
     } | {
         message: string;
         status: HttpStatus;
     }>;
     findByCode(code: number, throwIfNotFound?: boolean): Promise<{
-        id: string;
-        code: number;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: number;
         qrCode: string | null;
-        brandId: string | null;
     } | null>;
     update(id: string, updateProductDto: UpdateProductDto): Promise<{
-        id: string;
-        code: number;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: number;
         qrCode: string | null;
-        brandId: string | null;
     }>;
     searchProducts(paginationDto: PaginationDto): Promise<{
         data: any;
@@ -120,14 +120,14 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
         };
     }>;
     validateProducts(ids: string[]): Promise<{
-        id: string;
-        code: number;
         description: string;
+        brandId: string | null;
         available: boolean;
+        id: string;
         createdAt: Date;
         updatedAt: Date;
+        code: number;
         qrCode: string | null;
-        brandId: string | null;
     }[]>;
     deleteProducts(): Promise<import(".prisma/client").Prisma.BatchPayload>;
 }
