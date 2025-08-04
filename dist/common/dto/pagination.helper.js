@@ -21,7 +21,9 @@ async function PaginateWithMeta({ model, where = {}, include, select, orderBy, p
         where,
         include,
         select,
-        orderBy,
+        orderBy: {
+            description: 'asc',
+        },
         pagination,
     });
     const totalPages = Math.ceil(total / pagination.limit);

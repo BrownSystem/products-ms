@@ -38,6 +38,9 @@ let ProductsController = class ProductsController {
     generatePdfFileWithQrs(productsWithQty) {
         return this.productsService.generateQrsPdf(productsWithQty);
     }
+    generatePdfWithProducts(productsWithQty) {
+        return this.productsService.generatePdfWithProductsTable(productsWithQty);
+    }
     search(paginationDto) {
         return this.productsService.searchProducts(paginationDto);
     }
@@ -85,6 +88,13 @@ __decorate([
     __metadata("design:paramtypes", [Array]),
     __metadata("design:returntype", void 0)
 ], ProductsController.prototype, "generatePdfFileWithQrs", null);
+__decorate([
+    (0, microservices_1.MessagePattern)({ cmd: 'generate_pdf_with_products' }),
+    __param(0, (0, microservices_1.Payload)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Array]),
+    __metadata("design:returntype", void 0)
+], ProductsController.prototype, "generatePdfWithProducts", null);
 __decorate([
     (0, microservices_1.MessagePattern)({ cmd: 'search_products' }),
     __param(0, (0, microservices_1.Payload)()),

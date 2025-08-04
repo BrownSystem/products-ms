@@ -248,6 +248,102 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     });
   }
 
+  async generatePdfWithProductsTable(
+    productsWithQty: { code: number; quantity: number }[],
+  ): Promise<string> {
+    const codes = productsWithQty.map((p) => p.code);
+
+    const products = await this.eProduct.findMany({
+      where: { code: { in: codes } },
+      select: { code: true, description: true },
+    });
+
+    // Expandir según cantidad
+    const expandedProducts = productsWithQty.flatMap(({ code, quantity }) => {
+      const product = products.find((p) => p.code === code);
+      if (!product) return [];
+      return Array(quantity).fill(product);
+    });
+
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+    });
+
+    const buffers: Uint8Array[] = [];
+    doc.on('data', buffers.push.bind(buffers));
+
+    // Título
+    doc.fontSize(20).text('Listado de Productos', {
+      align: 'center',
+    });
+    doc.moveDown(1.5);
+
+    // Encabezado de tabla
+    const tableTop = doc.y;
+    const column1X = 50;
+    const column2X = 200;
+    const rowHeight = 25;
+
+    doc
+      .fontSize(12)
+      .font('Helvetica-Bold')
+      .text('Código', column1X, tableTop)
+      .text('Descripción', column2X, tableTop);
+
+    doc
+      .moveTo(column1X, tableTop + 18)
+      .lineTo(550, tableTop + 18)
+      .stroke();
+
+    let currentY = tableTop + rowHeight;
+
+    doc.font('Helvetica').fontSize(11);
+
+    for (const product of expandedProducts) {
+      if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        currentY = 50;
+
+        // Redibujar encabezado en nueva página
+        doc
+          .fontSize(12)
+          .font('Helvetica-Bold')
+          .text('Código', column1X, currentY)
+          .text('Descripción', column2X, currentY);
+
+        doc
+          .moveTo(column1X, currentY + 18)
+          .lineTo(550, currentY + 18)
+          .stroke();
+
+        currentY += rowHeight;
+        doc.font('Helvetica').fontSize(11);
+      }
+
+      doc.text(product.code.toString(), column1X, currentY, {
+        width: 100,
+        ellipsis: true,
+      });
+      doc.text(product.description || '', column2X, currentY, {
+        width: 350,
+        ellipsis: true,
+      });
+
+      currentY += rowHeight;
+    }
+
+    doc.end();
+
+    return await new Promise<string>((resolve, reject) => {
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(buffers);
+        resolve(pdfBuffer.toString('base64'));
+      });
+      doc.on('error', (err) => reject(err));
+    });
+  }
+
   async findAll(paginationDto: PaginationDto) {
     const { offset, limit } = paginationDto;
 
@@ -271,6 +367,9 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     );
 
     const products = await this.eProduct.findMany({
+      orderBy: {
+        description: 'asc',
+      },
       skip: (offset - 1) * limit,
       take: limit,
       where: { available: true },

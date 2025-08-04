@@ -5,7 +5,16 @@ import { PaginationDto } from 'src/common';
 export declare class ProductsController {
     private readonly productsService;
     constructor(productsService: ProductsService);
-    create(createProductDto: CreateProductDto): Promise<any>;
+    create(createProductDto: CreateProductDto): Promise<{
+        id: string;
+        code: number;
+        description: string;
+        available: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        qrCode: string | null;
+        brandId: string | null;
+    }>;
     uploadWithFile(rows: CreateProductDto[]): Promise<({
         message: string;
         status: import("@nestjs/common").HttpStatus;
@@ -16,6 +25,10 @@ export declare class ProductsController {
         status: import("@nestjs/common").HttpStatus;
     })[]>;
     generatePdfFileWithQrs(productsWithQty: {
+        code: number;
+        quantity: number;
+    }[]): Promise<string>;
+    generatePdfWithProducts(productsWithQty: {
         code: number;
         quantity: number;
     }[]): Promise<string>;

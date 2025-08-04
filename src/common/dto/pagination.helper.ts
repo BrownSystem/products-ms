@@ -42,7 +42,9 @@ export async function PaginateWithMeta<T>({
     where,
     include,
     select,
-    orderBy,
+    orderBy: {
+      description: 'asc',
+    },
     pagination,
   });
 

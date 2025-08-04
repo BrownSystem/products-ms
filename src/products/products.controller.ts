@@ -35,6 +35,13 @@ export class ProductsController {
     return this.productsService.generateQrsPdf(productsWithQty);
   }
 
+  @MessagePattern({ cmd: 'generate_pdf_with_products' })
+  generatePdfWithProducts(
+    @Payload() productsWithQty: { code: number; quantity: number }[],
+  ) {
+    return this.productsService.generatePdfWithProductsTable(productsWithQty);
+  }
+
   @MessagePattern({ cmd: 'search_products' })
   search(@Payload() paginationDto: PaginationDto) {
     return this.productsService.searchProducts(paginationDto);

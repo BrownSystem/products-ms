@@ -22,8 +22,21 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
         error: any;
         status: HttpStatus;
     })[]>;
-    create(createProductDto: CreateProductDto): Promise<any>;
+    create(createProductDto: CreateProductDto): Promise<{
+        id: string;
+        code: number;
+        description: string;
+        available: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        qrCode: string | null;
+        brandId: string | null;
+    }>;
     generateQrsPdf(productsWithQty: {
+        code: number;
+        quantity: number;
+    }[]): Promise<string>;
+    generatePdfWithProductsTable(productsWithQty: {
         code: number;
         quantity: number;
     }[]): Promise<string>;
