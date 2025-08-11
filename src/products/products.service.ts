@@ -12,7 +12,7 @@ import { PrismaClient } from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { BrandsService } from 'src/brands/brands.service';
 import { NATS_SERVICE } from 'src/config';
-import { first, firstValueFrom } from 'rxjs';
+import { filter, first, firstValueFrom } from 'rxjs';
 import { PaginateWithMeta, PaginationDto } from 'src/common';
 import * as QRcode from 'qrcode';
 import * as PDFDocument from 'pdfkit';
@@ -48,6 +48,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   private async _filterProductsByBranch(
     products: any[],
     branchId: string,
+    filterByStock: boolean,
   ): Promise<any[]> {
     const results = await Promise.all(
       products.map(async (item) => {
@@ -55,7 +56,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           const response = await firstValueFrom(
             this.client.send(
               { cmd: 'find_one_product_branch_id' },
-              { productId: item.id, branchId },
+              { productId: item.id, branchId, filterByStock },
             ),
           );
 
@@ -489,7 +490,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async searchProducts(paginationDto: PaginationDto) {
-    const { search, branchId } = paginationDto;
+    const { search, branchId, filterByStock } = paginationDto;
 
     // 1. Construimos condiciones de búsqueda base
     const where = this._buildSearchQuery(search);
@@ -515,6 +516,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     const filteredProducts = await this._filterProductsByBranch(
       paginatedProducts.data,
       branchId,
+      filterByStock,
     );
 
     if (filteredProducts.length === 0) {
@@ -536,7 +538,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async searchProductsWithAllBranchInventory(paginationDto: PaginationDto) {
-    const { search } = paginationDto;
+    const { search, filterByStock } = paginationDto;
     // 1. Filtro base
     const where = this._buildSearchQuery(search);
 
@@ -568,7 +570,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
               const response = await firstValueFrom(
                 this.client.send(
                   { cmd: 'find_one_product_branch_id' },
-                  { productId: product.id, branchId: branch.id },
+                  { productId: product.id, branchId: branch.id, filterByStock },
                 ),
               );
 
