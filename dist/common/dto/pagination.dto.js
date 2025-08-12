@@ -18,6 +18,7 @@ class PaginationDto {
     offset;
     search;
     orderPrice;
+    filterbystock;
     constructor(partial = {}) {
         Object.assign(this, partial);
         this.limit = partial?.limit || 10;
@@ -53,4 +54,9 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], PaginationDto.prototype, "orderPrice", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], PaginationDto.prototype, "filterbystock", void 0);
 //# sourceMappingURL=pagination.dto.js.map

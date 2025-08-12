@@ -6,14 +6,14 @@ export declare class ProductsController {
     private readonly productsService;
     constructor(productsService: ProductsService);
     create(createProductDto: CreateProductDto): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: number;
         qrCode: string | null;
+        brandId: string | null;
     }>;
     uploadWithFile(rows: CreateProductDto[]): Promise<({
         message: string;
@@ -51,12 +51,12 @@ export declare class ProductsController {
     findAll(paginationDto: PaginationDto): Promise<{
         data: {
             stock: number;
+            id: string;
+            code: number;
             description: string;
             available: boolean;
-            id: string;
             createdAt: Date;
             updatedAt: Date;
-            code: number;
             qrCode: string | null;
             brand: {
                 name: string;
@@ -79,37 +79,37 @@ export declare class ProductsController {
         pageSize: number;
     }>;
     findOne(id: string): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: number;
         qrCode: string | null;
+        brandId: string | null;
     } | {
         message: string;
         status: import("@nestjs/common").HttpStatus;
     }>;
     update(updateProductDto: UpdateProductDto): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: number;
         qrCode: string | null;
+        brandId: string | null;
     }>;
     validateProducts(ids: string[]): Promise<{
-        description: string;
-        brandId: string | null;
-        available: boolean;
         id: string;
+        code: number;
+        description: string;
+        available: boolean;
         createdAt: Date;
         updatedAt: Date;
-        code: number;
         qrCode: string | null;
+        brandId: string | null;
     }[]>;
     deleteAll(): Promise<import(".prisma/client").Prisma.BatchPayload>;
 }

@@ -44,21 +44,22 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         }
         return where;
     }
-    async _filterProductsByBranch(products, branchId) {
+    async _filterProductsByBranch(products, branchId, filterbystock) {
         const results = await Promise.all(products.map(async (item) => {
             try {
-                const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: item.id, branchId }));
+                const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: item.id, branchId, filterbystock }));
+                if (!response) {
+                    return null;
+                }
                 const { stock, id } = response;
                 const { qrCode, ...product } = item;
-                return response ? { product, inventory: { id, stock } } : null;
+                return { product, inventory: { id, stock } };
             }
             catch (err) {
-                return {
-                    message: `[FIND_ONE_BRANCH_PRODUCT] Error en la peticion`,
-                };
+                return null;
             }
         }));
-        return results.filter((item) => item !== null);
+        return results.filter((p) => p !== null);
     }
     constructor(client, brandService) {
         super();
@@ -369,7 +370,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         });
     }
     async searchProducts(paginationDto) {
-        const { search, branchId } = paginationDto;
+        const { search, branchId, filterbystock } = paginationDto;
         const where = this._buildSearchQuery(search);
         const paginatedProducts = await (0, common_2.PaginateWithMeta)({
             model: this.eProduct,
@@ -384,7 +385,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         }
         if (!branchId)
             return paginatedProducts;
-        const filteredProducts = await this._filterProductsByBranch(paginatedProducts.data, branchId);
+        const filteredProducts = await this._filterProductsByBranch(paginatedProducts.data, branchId, filterbystock);
         if (filteredProducts.length === 0) {
             throw new microservices_1.RpcException({
                 status: common_1.HttpStatus.NOT_FOUND,
@@ -398,7 +399,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         };
     }
     async searchProductsWithAllBranchInventory(paginationDto) {
-        const { search } = paginationDto;
+        const { search, filterbystock } = paginationDto;
         const where = this._buildSearchQuery(search);
         const paginatedProducts = await (0, common_2.PaginateWithMeta)({
             model: this.eProduct,
@@ -415,7 +416,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         const enrichedProducts = await Promise.all(paginatedProducts.data.map(async (product) => {
             const branchInventories = await Promise.all(branches.map(async (branch) => {
                 try {
-                    const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: product.id, branchId: branch.id }));
+                    const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: product.id, branchId: branch.id, filterbystock }));
                     return {
                         branchId: branch.id,
                         branchName: branch.name,

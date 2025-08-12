@@ -4,5 +4,6 @@ export declare class PaginationDto {
     offset: number;
     search?: string;
     orderPrice: 'asc' | 'desc' | undefined;
+    filterbystock: boolean;
     constructor(partial?: Partial<PaginationDto>);
 }

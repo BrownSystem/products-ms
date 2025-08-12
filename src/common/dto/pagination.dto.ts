@@ -26,7 +26,7 @@ export class PaginationDto {
 
   @IsOptional()
   @IsBoolean()
-  filterByStock: boolean;
+  filterbystock: boolean;
 
   constructor(partial: Partial<PaginationDto> = {}) {
     Object.assign(this, partial);

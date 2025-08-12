@@ -48,7 +48,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   private async _filterProductsByBranch(
     products: any[],
     branchId: string,
-    filterByStock: boolean,
+    filterbystock: boolean,
   ): Promise<any[]> {
     const results = await Promise.all(
       products.map(async (item) => {
@@ -56,24 +56,28 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           const response = await firstValueFrom(
             this.client.send(
               { cmd: 'find_one_product_branch_id' },
-              { productId: item.id, branchId, filterByStock },
+              { productId: item.id, branchId, filterbystock },
             ),
           );
 
-          const { stock, id } = response;
+          if (!response) {
+            // Si no hay respuesta, no lo incluimos
+            return null;
+          }
 
+          const { stock, id } = response;
           const { qrCode, ...product } = item;
 
-          return response ? { product, inventory: { id, stock } } : null;
+          return { product, inventory: { id, stock } };
         } catch (err) {
-          return {
-            message: `[FIND_ONE_BRANCH_PRODUCT] Error en la peticion`,
-          };
+          // Mejor devolver null para filtrarlo después
+          return null;
         }
       }),
     );
 
-    return results.filter((item) => item !== null);
+    // Filtramos nulls
+    return results.filter((p) => p !== null);
   }
 
   constructor(
@@ -490,7 +494,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async searchProducts(paginationDto: PaginationDto) {
-    const { search, branchId, filterByStock } = paginationDto;
+    const { search, branchId, filterbystock } = paginationDto;
 
     // 1. Construimos condiciones de búsqueda base
     const where = this._buildSearchQuery(search);
@@ -516,7 +520,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     const filteredProducts = await this._filterProductsByBranch(
       paginatedProducts.data,
       branchId,
-      filterByStock,
+      filterbystock,
     );
 
     if (filteredProducts.length === 0) {
@@ -538,7 +542,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async searchProductsWithAllBranchInventory(paginationDto: PaginationDto) {
-    const { search, filterByStock } = paginationDto;
+    const { search, filterbystock } = paginationDto;
     // 1. Filtro base
     const where = this._buildSearchQuery(search);
 
@@ -570,7 +574,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
               const response = await firstValueFrom(
                 this.client.send(
                   { cmd: 'find_one_product_branch_id' },
-                  { productId: product.id, branchId: branch.id, filterByStock },
+                  { productId: product.id, branchId: branch.id, filterbystock },
                 ),
               );
 
