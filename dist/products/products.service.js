@@ -189,76 +189,137 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
         });
     }
     async generatePdfWithProductsTable(productsWithQty) {
-        const codes = productsWithQty.map((p) => p.code);
-        const products = await this.eProduct.findMany({
-            where: { code: { in: codes } },
-            select: { code: true, description: true },
-        });
-        const expandedProducts = productsWithQty.flatMap(({ code, quantity }) => {
-            const product = products.find((p) => p.code === code);
-            if (!product)
-                return [];
-            return Array(quantity).fill(product);
-        });
-        const doc = new PDFDocument({
-            size: 'A4',
-            margin: 50,
-        });
-        const buffers = [];
-        doc.on('data', buffers.push.bind(buffers));
-        doc.fontSize(20).text('Listado de Productos', {
-            align: 'center',
-        });
-        doc.moveDown(1.5);
-        const tableTop = doc.y;
-        const column1X = 50;
-        const column2X = 200;
-        const rowHeight = 25;
-        doc
-            .fontSize(12)
-            .font('Helvetica-Bold')
-            .text('Código', column1X, tableTop)
-            .text('Descripción', column2X, tableTop);
-        doc
-            .moveTo(column1X, tableTop + 18)
-            .lineTo(550, tableTop + 18)
-            .stroke();
-        let currentY = tableTop + rowHeight;
-        doc.font('Helvetica').fontSize(11);
-        for (const product of expandedProducts) {
-            if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom) {
-                doc.addPage();
-                currentY = 50;
-                doc
-                    .fontSize(12)
-                    .font('Helvetica-Bold')
-                    .text('Código', column1X, currentY)
-                    .text('Descripción', column2X, currentY);
-                doc
-                    .moveTo(column1X, currentY + 18)
-                    .lineTo(550, currentY + 18)
-                    .stroke();
-                currentY += rowHeight;
-                doc.font('Helvetica').fontSize(11);
+        try {
+            const codes = productsWithQty.map((p) => p.code);
+            const products = await this.eProduct.findMany({
+                where: { code: { in: codes } },
+                select: { id: true, code: true, description: true },
+            });
+            if (products.length === 0) {
+                throw new microservices_1.RpcException({
+                    status: common_1.HttpStatus.NOT_FOUND,
+                    message: '[GENERATE_PDF_PRODUCTS] No products found',
+                });
             }
-            doc.text(product.code.toString(), column1X, currentY, {
-                width: 100,
-                ellipsis: true,
+            const expandedProducts = productsWithQty.flatMap(({ code, quantity }) => {
+                const product = products.find((p) => p.code === code);
+                return product ? Array(quantity).fill(product) : [];
             });
-            doc.text(product.description || '', column2X, currentY, {
-                width: 350,
-                ellipsis: true,
+            const branches = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_all_branches' }, {}));
+            const enrichedProducts = await Promise.all(expandedProducts.map(async (product) => {
+                const inventories = await Promise.all(branches.map(async (branch) => {
+                    try {
+                        const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: product.id, branchId: branch.id }));
+                        return { branchName: branch.name, stock: response?.stock ?? 0 };
+                    }
+                    catch {
+                        return { branchName: branch.name, stock: null };
+                    }
+                }));
+                return {
+                    code: product.code,
+                    description: product.description,
+                    inventories,
+                };
+            }));
+            const doc = new PDFDocument({ size: 'A4' });
+            const buffers = [];
+            doc.on('data', buffers.push.bind(buffers));
+            const tableConfig = {
+                rowHeight: 25,
+                colCode: 50,
+                colDesc: 120,
+                branchCols: branches.map((_, idx) => 250 + idx * 80),
+            };
+            const headerBg = '#f5f5f5';
+            const altRowBg = '#fafafa';
+            const borderColor = '#e0e0e0';
+            const fillRect = (x, y, width, height, color) => {
+                doc.save().rect(x, y, width, height).fill(color).restore();
+            };
+            const drawTableHeader = (y) => {
+                fillRect(50, y - 5, 500, tableConfig.rowHeight, headerBg);
+                doc.fontSize(11).font('Helvetica-Bold').fillColor('#333');
+                doc.text('Código', tableConfig.colCode, y, { width: 60 });
+                doc.text('Descripción', tableConfig.colDesc, y, { width: 150 });
+                branches.forEach((branch, idx) => {
+                    const shortName = branch.name.length > 10
+                        ? branch.name.substring(0, 8) + '.'
+                        : branch.name;
+                    doc.text(shortName, tableConfig.branchCols[idx], y, {
+                        width: 75,
+                        align: 'center',
+                    });
+                });
+                doc
+                    .strokeColor(borderColor)
+                    .moveTo(50, y + tableConfig.rowHeight - 5)
+                    .lineTo(550, y + tableConfig.rowHeight - 5)
+                    .stroke();
+            };
+            const checkPageOverflow = (y) => {
+                if (y + tableConfig.rowHeight >
+                    doc.page.height - doc.page.margins.bottom) {
+                    doc.addPage();
+                    y = 50;
+                    drawTableHeader(y);
+                    y += tableConfig.rowHeight;
+                }
+                return y;
+            };
+            const drawProductRow = (product, y, index) => {
+                if (index % 2 === 0) {
+                    fillRect(50, y - 5, 500, tableConfig.rowHeight, altRowBg);
+                }
+                doc.font('Helvetica').fontSize(10).fillColor('#000');
+                doc.text(product.code.toString(), tableConfig.colCode, y, {
+                    width: 60,
+                });
+                doc.text(product.description || '', tableConfig.colDesc, y, {
+                    width: 150,
+                });
+                product.inventories.forEach((inv, idx) => {
+                    doc.text(inv.stock !== null ? inv.stock.toString() : '-', tableConfig.branchCols[idx], y, { width: 75, align: 'center' });
+                });
+                doc
+                    .strokeColor(borderColor)
+                    .moveTo(50, y + tableConfig.rowHeight - 5)
+                    .lineTo(550, y + tableConfig.rowHeight - 5)
+                    .stroke();
+            };
+            doc
+                .fontSize(18)
+                .fillColor('#222')
+                .font('Helvetica-Bold')
+                .text('CATALOGO DE PRODUCTOS', {
+                align: 'center',
             });
-            currentY += rowHeight;
+            doc.moveDown(1.5);
+            let currentY = doc.y;
+            drawTableHeader(currentY);
+            currentY += tableConfig.rowHeight;
+            let rowIndex = 0;
+            for (const product of enrichedProducts) {
+                currentY = checkPageOverflow(currentY);
+                drawProductRow(product, currentY, rowIndex);
+                currentY += tableConfig.rowHeight;
+                rowIndex++;
+            }
+            doc.end();
+            return await new Promise((resolve, reject) => {
+                doc.on('end', () => {
+                    const pdfBuffer = Buffer.concat(buffers);
+                    resolve(pdfBuffer.toString('base64'));
+                });
+                doc.on('error', reject);
+            });
         }
-        doc.end();
-        return await new Promise((resolve, reject) => {
-            doc.on('end', () => {
-                const pdfBuffer = Buffer.concat(buffers);
-                resolve(pdfBuffer.toString('base64'));
+        catch (error) {
+            throw new microservices_1.RpcException({
+                status: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                message: '[GENERATE_PDF_PRODUCTS] ' + error.message,
             });
-            doc.on('error', (err) => reject(err));
-        });
+        }
     }
     async findAll(paginationDto) {
         const { offset, limit } = paginationDto;
