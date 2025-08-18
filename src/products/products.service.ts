@@ -311,13 +311,13 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       );
 
       // 5. Crear PDF
-      const doc = new PDFDocument({ size: 'A4' });
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
       const buffers: Buffer[] = [];
       doc.on('data', buffers.push.bind(buffers));
 
       // Config tabla
       const tableConfig = {
-        rowHeight: 25,
+        baseRowHeight: 25,
         colCode: 50,
         colDesc: 120,
         branchCols: branches.map((_, idx) => 250 + idx * 80),
@@ -334,7 +334,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
       // 🔹 Dibujar encabezado
       const drawTableHeader = (y: number) => {
-        fillRect(50, y - 5, 500, tableConfig.rowHeight, headerBg);
+        fillRect(50, y - 5, 500, tableConfig.baseRowHeight, headerBg);
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#333');
 
         doc.text('Código', tableConfig.colCode, y, { width: 60 });
@@ -354,40 +354,48 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
         doc
           .strokeColor(borderColor)
-          .moveTo(50, y + tableConfig.rowHeight - 5)
-          .lineTo(550, y + tableConfig.rowHeight - 5)
+          .moveTo(50, y + tableConfig.baseRowHeight - 5)
+          .lineTo(550, y + tableConfig.baseRowHeight - 5)
           .stroke();
       };
 
       // 🔹 Verificar salto de página
-      const checkPageOverflow = (y: number): number => {
-        if (
-          y + tableConfig.rowHeight >
-          doc.page.height - doc.page.margins.bottom
-        ) {
+      const checkPageOverflow = (y: number, rowHeight: number): number => {
+        if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
           doc.addPage();
           y = 50;
           drawTableHeader(y);
-          y += tableConfig.rowHeight;
+          y += tableConfig.baseRowHeight;
         }
         return y;
       };
 
       // 🔹 Dibujar fila
-      const drawProductRow = (product, y: number, index: number) => {
+      const drawProductRow = (product, y: number, index: number): number => {
+        // calcular altura real de la descripción
+        const descHeight = doc.heightOfString(product.description || '', {
+          width: 150,
+        });
+
+        const rowHeight = Math.max(tableConfig.baseRowHeight, descHeight + 5);
+
         if (index % 2 === 0) {
-          fillRect(50, y - 5, 500, tableConfig.rowHeight, altRowBg);
+          fillRect(50, y - 5, 500, rowHeight, altRowBg);
         }
 
         doc.font('Helvetica').fontSize(10).fillColor('#000');
 
+        // Código
         doc.text(product.code.toString(), tableConfig.colCode, y, {
           width: 60,
         });
+
+        // Descripción
         doc.text(product.description || '', tableConfig.colDesc, y, {
           width: 150,
         });
 
+        // Stocks
         product.inventories.forEach((inv, idx) => {
           doc.text(
             inv.stock !== null ? inv.stock.toString() : '-',
@@ -397,11 +405,14 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           );
         });
 
+        // Línea inferior
         doc
           .strokeColor(borderColor)
-          .moveTo(50, y + tableConfig.rowHeight - 5)
-          .lineTo(550, y + tableConfig.rowHeight - 5)
+          .moveTo(50, y + rowHeight - 5)
+          .lineTo(550, y + rowHeight - 5)
           .stroke();
+
+        return y + rowHeight; // devolver nuevo Y
       };
 
       // 🔹 Título
@@ -409,21 +420,24 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         .fontSize(18)
         .fillColor('#222')
         .font('Helvetica-Bold')
-        .text('CATALOGO DE PRODUCTOS', {
-          align: 'center',
-        });
+        .text('CATALOGO DE PRODUCTOS', { align: 'center' });
       doc.moveDown(1.5);
 
       let currentY = doc.y;
       drawTableHeader(currentY);
-      currentY += tableConfig.rowHeight;
+      currentY += tableConfig.baseRowHeight;
 
       // 🔹 Dibujar filas
       let rowIndex = 0;
       for (const product of enrichedProducts) {
-        currentY = checkPageOverflow(currentY);
-        drawProductRow(product, currentY, rowIndex);
-        currentY += tableConfig.rowHeight;
+        // calculamos rowHeight preliminar para saber si hay overflow
+        const descHeight = doc.heightOfString(product.description || '', {
+          width: 150,
+        });
+        const rowHeight = Math.max(tableConfig.baseRowHeight, descHeight + 5);
+
+        currentY = checkPageOverflow(currentY, rowHeight);
+        currentY = drawProductRow(product, currentY, rowIndex);
         rowIndex++;
       }
 
