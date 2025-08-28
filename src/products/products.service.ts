@@ -259,10 +259,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     try {
       const codes = productsWithQty.map((p) => p.code);
 
-      // 1. Buscar productos
+      // 1. Buscar productos ordenados por descripción
       const products = await this.eProduct.findMany({
         where: { code: { in: codes } },
         select: { id: true, code: true, description: true },
+        orderBy: { description: 'asc' },
       });
 
       if (products.length === 0) {
@@ -310,6 +311,13 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         }),
       );
 
+      // ✅ Reordenar alfabéticamente por descripción
+      enrichedProducts.sort((a, b) =>
+        a.description.localeCompare(b.description, 'es', {
+          sensitivity: 'base',
+        }),
+      );
+
       // 5. Crear PDF
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
       const buffers: Buffer[] = [];
@@ -323,7 +331,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         branchCols: branches.map((_, idx) => 250 + idx * 80),
       };
 
-      // 🔹 Colores
+      // Colores
       const headerBg = '#f5f5f5';
       const altRowBg = '#fafafa';
       const borderColor = '#e0e0e0';
@@ -332,7 +340,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         doc.save().rect(x, y, width, height).fill(color).restore();
       };
 
-      // 🔹 Dibujar encabezado
+      // Dibujar encabezado
       const drawTableHeader = (y: number) => {
         fillRect(50, y - 5, 500, tableConfig.baseRowHeight, headerBg);
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#333');
@@ -359,7 +367,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           .stroke();
       };
 
-      // 🔹 Verificar salto de página
+      // Verificar salto de página
       const checkPageOverflow = (y: number, rowHeight: number): number => {
         if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
           doc.addPage();
@@ -370,13 +378,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         return y;
       };
 
-      // 🔹 Dibujar fila
+      // Dibujar fila
       const drawProductRow = (product, y: number, index: number): number => {
-        // calcular altura real de la descripción
         const descHeight = doc.heightOfString(product.description || '', {
           width: 150,
         });
-
         const rowHeight = Math.max(tableConfig.baseRowHeight, descHeight + 5);
 
         if (index % 2 === 0) {
@@ -412,10 +418,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           .lineTo(550, y + rowHeight - 5)
           .stroke();
 
-        return y + rowHeight; // devolver nuevo Y
+        return y + rowHeight;
       };
 
-      // 🔹 Título
+      // Título
       doc
         .fontSize(18)
         .fillColor('#222')
@@ -427,10 +433,9 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       drawTableHeader(currentY);
       currentY += tableConfig.baseRowHeight;
 
-      // 🔹 Dibujar filas
+      // Dibujar filas
       let rowIndex = 0;
       for (const product of enrichedProducts) {
-        // calculamos rowHeight preliminar para saber si hay overflow
         const descHeight = doc.heightOfString(product.description || '', {
           width: 150,
         });

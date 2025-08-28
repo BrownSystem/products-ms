@@ -194,6 +194,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
             const products = await this.eProduct.findMany({
                 where: { code: { in: codes } },
                 select: { id: true, code: true, description: true },
+                orderBy: { description: 'asc' },
             });
             if (products.length === 0) {
                 throw new microservices_1.RpcException({
@@ -222,11 +223,14 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                     inventories,
                 };
             }));
-            const doc = new PDFDocument({ size: 'A4' });
+            enrichedProducts.sort((a, b) => a.description.localeCompare(b.description, 'es', {
+                sensitivity: 'base',
+            }));
+            const doc = new PDFDocument({ size: 'A4', margin: 40 });
             const buffers = [];
             doc.on('data', buffers.push.bind(buffers));
             const tableConfig = {
-                rowHeight: 25,
+                baseRowHeight: 25,
                 colCode: 50,
                 colDesc: 120,
                 branchCols: branches.map((_, idx) => 250 + idx * 80),
@@ -238,7 +242,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 doc.save().rect(x, y, width, height).fill(color).restore();
             };
             const drawTableHeader = (y) => {
-                fillRect(50, y - 5, 500, tableConfig.rowHeight, headerBg);
+                fillRect(50, y - 5, 500, tableConfig.baseRowHeight, headerBg);
                 doc.fontSize(11).font('Helvetica-Bold').fillColor('#333');
                 doc.text('Código', tableConfig.colCode, y, { width: 60 });
                 doc.text('Descripción', tableConfig.colDesc, y, { width: 150 });
@@ -253,23 +257,26 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 });
                 doc
                     .strokeColor(borderColor)
-                    .moveTo(50, y + tableConfig.rowHeight - 5)
-                    .lineTo(550, y + tableConfig.rowHeight - 5)
+                    .moveTo(50, y + tableConfig.baseRowHeight - 5)
+                    .lineTo(550, y + tableConfig.baseRowHeight - 5)
                     .stroke();
             };
-            const checkPageOverflow = (y) => {
-                if (y + tableConfig.rowHeight >
-                    doc.page.height - doc.page.margins.bottom) {
+            const checkPageOverflow = (y, rowHeight) => {
+                if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
                     doc.addPage();
                     y = 50;
                     drawTableHeader(y);
-                    y += tableConfig.rowHeight;
+                    y += tableConfig.baseRowHeight;
                 }
                 return y;
             };
             const drawProductRow = (product, y, index) => {
+                const descHeight = doc.heightOfString(product.description || '', {
+                    width: 150,
+                });
+                const rowHeight = Math.max(tableConfig.baseRowHeight, descHeight + 5);
                 if (index % 2 === 0) {
-                    fillRect(50, y - 5, 500, tableConfig.rowHeight, altRowBg);
+                    fillRect(50, y - 5, 500, rowHeight, altRowBg);
                 }
                 doc.font('Helvetica').fontSize(10).fillColor('#000');
                 doc.text(product.code.toString(), tableConfig.colCode, y, {
@@ -283,26 +290,28 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 });
                 doc
                     .strokeColor(borderColor)
-                    .moveTo(50, y + tableConfig.rowHeight - 5)
-                    .lineTo(550, y + tableConfig.rowHeight - 5)
+                    .moveTo(50, y + rowHeight - 5)
+                    .lineTo(550, y + rowHeight - 5)
                     .stroke();
+                return y + rowHeight;
             };
             doc
                 .fontSize(18)
                 .fillColor('#222')
                 .font('Helvetica-Bold')
-                .text('CATALOGO DE PRODUCTOS', {
-                align: 'center',
-            });
+                .text('CATALOGO DE PRODUCTOS', { align: 'center' });
             doc.moveDown(1.5);
             let currentY = doc.y;
             drawTableHeader(currentY);
-            currentY += tableConfig.rowHeight;
+            currentY += tableConfig.baseRowHeight;
             let rowIndex = 0;
             for (const product of enrichedProducts) {
-                currentY = checkPageOverflow(currentY);
-                drawProductRow(product, currentY, rowIndex);
-                currentY += tableConfig.rowHeight;
+                const descHeight = doc.heightOfString(product.description || '', {
+                    width: 150,
+                });
+                const rowHeight = Math.max(tableConfig.baseRowHeight, descHeight + 5);
+                currentY = checkPageOverflow(currentY, rowHeight);
+                currentY = drawProductRow(product, currentY, rowIndex);
                 rowIndex++;
             }
             doc.end();
