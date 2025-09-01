@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { BrandsService } from 'src/brands/brands.service';
 import { PaginationDto } from 'src/common';
+import { PrintQrDto } from './dto/print-qr.dto';
 export declare class ProductsService extends PrismaClient implements OnModuleInit {
     private readonly client;
     private readonly brandService;
@@ -36,10 +37,7 @@ export declare class ProductsService extends PrismaClient implements OnModuleIni
         code: number;
         quantity: number;
     }[]): Promise<string>;
-    generatePdfWithProductsTable(productsWithQty: {
-        code: number;
-        quantity: number;
-    }[]): Promise<string>;
+    generatePdfWithProductsTable(productsWithQty: PrintQrDto): Promise<string>;
     findAll(paginationDto: PaginationDto): Promise<{
         data: {
             stock: number;

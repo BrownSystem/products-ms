@@ -9,6 +9,7 @@ import {
   RpcException,
 } from '@nestjs/microservices';
 import { PaginationDto } from 'src/common';
+import { PrintQrDto } from './dto/print-qr.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -37,7 +38,8 @@ export class ProductsController {
 
   @MessagePattern({ cmd: 'generate_pdf_with_products' })
   generatePdfWithProducts(
-    @Payload() productsWithQty: { code: number; quantity: number }[],
+    @Payload()
+    productsWithQty: PrintQrDto,
   ) {
     return this.productsService.generatePdfWithProductsTable(productsWithQty);
   }

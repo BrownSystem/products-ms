@@ -190,25 +190,25 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
     }
     async generatePdfWithProductsTable(productsWithQty) {
         try {
-            const codes = productsWithQty.map((p) => p.code);
-            const products = await this.eProduct.findMany({
+            const { products, branchOrder } = productsWithQty;
+            const codes = products.map((p) => p.code);
+            const findProducts = await this.eProduct.findMany({
                 where: { code: { in: codes } },
                 select: { id: true, code: true, description: true },
                 orderBy: { description: 'asc' },
             });
-            if (products.length === 0) {
+            if (findProducts.length === 0) {
                 throw new microservices_1.RpcException({
                     status: common_1.HttpStatus.NOT_FOUND,
                     message: '[GENERATE_PDF_PRODUCTS] No products found',
                 });
             }
-            const expandedProducts = productsWithQty.flatMap(({ code, quantity }) => {
-                const product = products.find((p) => p.code === code);
+            const expandedProducts = products.flatMap(({ code, quantity }) => {
+                const product = findProducts.find((p) => p.code === code);
                 return product ? Array(quantity).fill(product) : [];
             });
-            const branches = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_all_branches' }, {}));
             const enrichedProducts = await Promise.all(expandedProducts.map(async (product) => {
-                const inventories = await Promise.all(branches.map(async (branch) => {
+                const inventories = await Promise.all((branchOrder ?? []).map(async (branch) => {
                     try {
                         const response = await (0, rxjs_1.firstValueFrom)(this.client.send({ cmd: 'find_one_product_branch_id' }, { productId: product.id, branchId: branch.id }));
                         return { branchName: branch.name, stock: response?.stock ?? 0 };
@@ -233,7 +233,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 baseRowHeight: 25,
                 colCode: 50,
                 colDesc: 120,
-                branchCols: branches.map((_, idx) => 250 + idx * 80),
+                branchCols: (branchOrder ?? []).map((_, idx) => 250 + idx * 80),
             };
             const headerBg = '#f5f5f5';
             const altRowBg = '#fafafa';
@@ -246,7 +246,7 @@ let ProductsService = ProductsService_1 = class ProductsService extends client_1
                 doc.fontSize(11).font('Helvetica-Bold').fillColor('#333');
                 doc.text('Código', tableConfig.colCode, y, { width: 60 });
                 doc.text('Descripción', tableConfig.colDesc, y, { width: 150 });
-                branches.forEach((branch, idx) => {
+                (branchOrder ?? []).forEach((branch, idx) => {
                     const shortName = branch.name.length > 10
                         ? branch.name.substring(0, 8) + '.'
                         : branch.name;

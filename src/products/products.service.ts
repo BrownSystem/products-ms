@@ -17,6 +17,7 @@ import { PaginateWithMeta, PaginationDto } from 'src/common';
 import * as QRcode from 'qrcode';
 import * as PDFDocument from 'pdfkit';
 import pLimit from 'p-limit';
+import { PrintQrDto } from './dto/print-qr.dto';
 @Injectable()
 export class ProductsService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger(ProductsService.name);
@@ -254,19 +255,20 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async generatePdfWithProductsTable(
-    productsWithQty: { code: number; quantity: number }[],
+    productsWithQty: PrintQrDto,
   ): Promise<string> {
     try {
-      const codes = productsWithQty.map((p) => p.code);
+      const { products, branchOrder } = productsWithQty;
+      const codes = products.map((p) => p.code);
 
       // 1. Buscar productos ordenados por descripción
-      const products = await this.eProduct.findMany({
+      const findProducts = await this.eProduct.findMany({
         where: { code: { in: codes } },
         select: { id: true, code: true, description: true },
         orderBy: { description: 'asc' },
       });
 
-      if (products.length === 0) {
+      if (findProducts.length === 0) {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
           message: '[GENERATE_PDF_PRODUCTS] No products found',
@@ -274,21 +276,18 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       }
 
       // 2. Expandir según cantidad
-      const expandedProducts = productsWithQty.flatMap(({ code, quantity }) => {
-        const product = products.find((p) => p.code === code);
+      const expandedProducts = products.flatMap(({ code, quantity }) => {
+        const product = findProducts.find((p) => p.code === code);
         return product ? Array(quantity).fill(product) : [];
       });
 
-      // 3. Obtener sucursales
-      const branches = await firstValueFrom(
-        this.client.send({ cmd: 'find_all_branches' }, {}),
-      );
+      // 3. Obtener sucursales ya reordenadas desde microservicio
 
       // 4. Enriquecer productos con inventario
       const enrichedProducts = await Promise.all(
         expandedProducts.map(async (product) => {
           const inventories = await Promise.all(
-            branches.map(async (branch) => {
+            (branchOrder ?? []).map(async (branch) => {
               try {
                 const response = await firstValueFrom(
                   this.client.send(
@@ -311,7 +310,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         }),
       );
 
-      // ✅ Reordenar alfabéticamente por descripción
+      // ✅ Reordenar productos alfabéticamente por descripción
       enrichedProducts.sort((a, b) =>
         a.description.localeCompare(b.description, 'es', {
           sensitivity: 'base',
@@ -328,7 +327,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         baseRowHeight: 25,
         colCode: 50,
         colDesc: 120,
-        branchCols: branches.map((_, idx) => 250 + idx * 80),
+        branchCols: (branchOrder ?? []).map((_, idx) => 250 + idx * 80),
       };
 
       // Colores
@@ -348,7 +347,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         doc.text('Código', tableConfig.colCode, y, { width: 60 });
         doc.text('Descripción', tableConfig.colDesc, y, { width: 150 });
 
-        branches.forEach((branch, idx) => {
+        (branchOrder ?? []).forEach((branch, idx) => {
           const shortName =
             branch.name.length > 10
               ? branch.name.substring(0, 8) + '.'
@@ -391,17 +390,13 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
         doc.font('Helvetica').fontSize(10).fillColor('#000');
 
-        // Código
         doc.text(product.code.toString(), tableConfig.colCode, y, {
           width: 60,
         });
-
-        // Descripción
         doc.text(product.description || '', tableConfig.colDesc, y, {
           width: 150,
         });
 
-        // Stocks
         product.inventories.forEach((inv, idx) => {
           doc.text(
             inv.stock !== null ? inv.stock.toString() : '-',
@@ -411,7 +406,6 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
           );
         });
 
-        // Línea inferior
         doc
           .strokeColor(borderColor)
           .moveTo(50, y + rowHeight - 5)

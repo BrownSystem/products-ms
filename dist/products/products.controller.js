@@ -19,6 +19,7 @@ const create_product_dto_1 = require("./dto/create-product.dto");
 const update_product_dto_1 = require("./dto/update-product.dto");
 const microservices_1 = require("@nestjs/microservices");
 const common_2 = require("../common");
+const print_qr_dto_1 = require("./dto/print-qr.dto");
 let ProductsController = class ProductsController {
     productsService;
     constructor(productsService) {
@@ -92,7 +93,7 @@ __decorate([
     (0, microservices_1.MessagePattern)({ cmd: 'generate_pdf_with_products' }),
     __param(0, (0, microservices_1.Payload)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Array]),
+    __metadata("design:paramtypes", [print_qr_dto_1.PrintQrDto]),
     __metadata("design:returntype", void 0)
 ], ProductsController.prototype, "generatePdfWithProducts", null);
 __decorate([

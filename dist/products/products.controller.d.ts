@@ -2,6 +2,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from 'src/common';
+import { PrintQrDto } from './dto/print-qr.dto';
 export declare class ProductsController {
     private readonly productsService;
     constructor(productsService: ProductsService);
@@ -28,10 +29,7 @@ export declare class ProductsController {
         code: number;
         quantity: number;
     }[]): Promise<string>;
-    generatePdfWithProducts(productsWithQty: {
-        code: number;
-        quantity: number;
-    }[]): Promise<string>;
+    generatePdfWithProducts(productsWithQty: PrintQrDto): Promise<string>;
     search(paginationDto: PaginationDto): Promise<{
         data: any;
         meta: {
