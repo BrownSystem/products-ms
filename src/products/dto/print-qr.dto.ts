@@ -5,6 +5,7 @@ import {
   Min,
   IsNumber,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -23,6 +24,10 @@ export class PrintQrDto {
   @ValidateNested({ each: true })
   @Type(() => ProductQrItemDto)
   products: ProductQrItemDto[];
+
+  @IsBoolean()
+  @IsOptional()
+  removeStockZero: boolean;
 
   @IsArray()
   @IsOptional()

@@ -258,7 +258,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     productsWithQty: PrintQrDto,
   ): Promise<string> {
     try {
-      const { products, branchOrder } = productsWithQty;
+      const { products, branchOrder, removeStockZero } = productsWithQty;
       const codes = products.map((p) => p.code);
 
       // 1. Buscar productos ordenados por descripción
@@ -284,31 +284,44 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       // 3. Obtener sucursales ya reordenadas desde microservicio
 
       // 4. Enriquecer productos con inventario
-      const enrichedProducts = await Promise.all(
-        expandedProducts.map(async (product) => {
-          const inventories = await Promise.all(
-            (branchOrder ?? []).map(async (branch) => {
-              try {
-                const response = await firstValueFrom(
-                  this.client.send(
-                    { cmd: 'find_one_product_branch_id' },
-                    { productId: product.id, branchId: branch.id },
-                  ),
-                );
-                return { branchName: branch.name, stock: response?.stock ?? 0 };
-              } catch {
-                return { branchName: branch.name, stock: null };
-              }
-            }),
-          );
+      const enrichedProducts = (
+        await Promise.all(
+          expandedProducts.map(async (product) => {
+            const inventories = await Promise.all(
+              (branchOrder ?? []).map(async (branch) => {
+                try {
+                  const response = await firstValueFrom(
+                    this.client.send(
+                      { cmd: 'find_one_product_branch_id' },
+                      { productId: product.id, branchId: branch.id },
+                    ),
+                  );
+                  return {
+                    branchName: branch.name,
+                    stock: response?.stock ?? 0,
+                  };
+                } catch {
+                  return { branchName: branch.name, stock: null };
+                }
+              }),
+            );
 
-          return {
-            code: product.code,
-            description: product.description,
-            inventories,
-          };
-        }),
-      );
+            // 👇 lógica de removeStockZero directamente acá
+            if (removeStockZero) {
+              const hasStock = inventories.some((inv) => (inv.stock ?? 0) > 0);
+              if (!hasStock) {
+                return null; // descartar producto
+              }
+            }
+
+            return {
+              code: product.code,
+              description: product.description,
+              inventories,
+            };
+          }),
+        )
+      ).filter((p) => p !== null); // limpiar productos descartados
 
       // ✅ Reordenar productos alfabéticamente por descripción
       enrichedProducts.sort((a, b) =>
