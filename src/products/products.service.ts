@@ -81,6 +81,28 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     return results.filter((p) => p !== null);
   }
 
+  // Metodo para crear el producto y emitir el evento de relacionarlo con las sucursales
+  private async resultCreateProductWithBranch({ newProduct }) {
+    try {
+      const result = await firstValueFrom(
+        this.client.send(
+          { cmd: 'emit_create_branch_product' },
+          {
+            productId: newProduct.id,
+            stock: 0,
+          },
+        ),
+      );
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw new RpcException({
+        message: `[CREATE_PRODUCT_WITH_BRANCH] Error creating product with branch ${error}`,
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+      });
+    }
+  }
+
   constructor(
     @Inject(NATS_SERVICE) private readonly client: ClientProxy,
     private readonly brandService: BrandsService,
@@ -141,16 +163,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
         },
       });
 
-      await firstValueFrom(
-        this.client.send(
-          { cmd: 'emit_create_branch_product' },
-          {
-            productId: newProduct.id,
-            stock: 0,
-          },
-        ),
-      );
-
+      // PROBLEMA EN EJECUTARSE
+      await this.resultCreateProductWithBranch({
+        newProduct,
+      });
       const code = `${newProduct.code} - ${newProduct.description}`;
 
       const qrCodeDataUrl = await QRcode.toDataURL(code);
@@ -165,6 +181,49 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       throw error;
     }
   }
+
+  // async updateStock(updateStockDto: UpdateStockDto) {
+  //   try {
+  //     const { productId, stock, branchId } = updateStockDto;
+
+  //     // 1️⃣ Verificar producto
+  //     const product = await this.eProduct.findUnique({
+  //       where: { id: productId },
+  //     });
+  //     if (!product) {
+  //       throw new RpcException({
+  //         message: `Product with id ${productId} not found`,
+  //         status: HttpStatus.NOT_FOUND,
+  //       });
+  //     }
+
+  //     // 2️⃣ Emitir evento al microservicio de inventario o actualizar directamente
+  //     const response = await firstValueFrom(
+  //       this.client.send(
+  //         { cmd: 'emit_update_branch_stock' },
+  //         {
+  //           productId,
+  //           branchId,
+  //           stock,
+  //         },
+  //       ),
+  //     );
+
+  //     // 3️⃣ Retornar resultado (puede ser el producto actualizado o el resultado del evento)
+  //     return {
+  //       message: 'Stock actualizado correctamente',
+  //       productId,
+  //       branchId,
+  //       newStock: stock,
+  //       response,
+  //     };
+  //   } catch (error) {
+  //     throw new RpcException({
+  //       message: `[UPDATE-STOCK] ${error.message}`,
+  //       status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+  //     });
+  //   }
+  // }
 
   async generateQrsPdf(
     productsWithQty: { code: number; quantity: number }[],

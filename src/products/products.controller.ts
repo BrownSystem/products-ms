@@ -10,6 +10,7 @@ import {
 } from '@nestjs/microservices';
 import { PaginationDto } from 'src/common';
 import { PrintQrDto } from './dto/print-qr.dto';
+import { UpdateStockDto } from './dto/update-stock.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -77,6 +78,11 @@ export class ProductsController {
   update(@Payload() updateProductDto: UpdateProductDto) {
     return this.productsService.update(updateProductDto.id, updateProductDto);
   }
+
+  // @MessagePattern({ cmd: 'update_stock' })
+  // updateStock(@Payload() updateStock: UpdateStockDto) {
+  //   return this.productsService.updateStock(updateStock);
+  // }
 
   @MessagePattern({ cmd: 'validate_products' })
   validateProducts(@Payload() ids: string[]) {
