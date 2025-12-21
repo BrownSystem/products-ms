@@ -10,7 +10,6 @@ import {
 } from '@nestjs/microservices';
 import { PaginationDto } from 'src/common';
 import { PrintQrDto } from './dto/print-qr.dto';
-import { UpdateStockDto } from './dto/update-stock.dto';
 
 @Controller('products')
 export class ProductsController {

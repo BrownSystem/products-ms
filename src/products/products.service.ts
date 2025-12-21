@@ -18,6 +18,7 @@ import * as QRcode from 'qrcode';
 import * as PDFDocument from 'pdfkit';
 import pLimit from 'p-limit';
 import { PrintQrDto } from './dto/print-qr.dto';
+import { any } from 'joi';
 @Injectable()
 export class ProductsService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger(ProductsService.name);
@@ -83,24 +84,16 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
   // Metodo para crear el producto y emitir el evento de relacionarlo con las sucursales
   private async resultCreateProductWithBranch({ newProduct }) {
-    try {
-      const result = await firstValueFrom(
-        this.client.send(
-          { cmd: 'emit_create_branch_product' },
-          {
-            productId: newProduct.id,
-            stock: 0,
-          },
-        ),
-      );
-      return result;
-    } catch (error) {
-      console.log(error);
-      throw new RpcException({
-        message: `[CREATE_PRODUCT_WITH_BRANCH] Error creating product with branch ${error}`,
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const result = await firstValueFrom(
+      this.client.send(
+        { cmd: 'emit_create_branch_product' },
+        {
+          productId: newProduct.id,
+          stock: 0,
+        },
+      ),
+    );
+    return result;
   }
 
   constructor(
@@ -143,7 +136,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
   async create(createProductDto: CreateProductDto) {
     try {
-      const { brandId, description, available } = createProductDto;
+      const { brandId, description } = createProductDto;
 
       if (brandId) {
         const isBrand = await this.brandService.findOne(brandId);
@@ -158,15 +151,14 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       const newProduct = await this.eProduct.create({
         data: {
           description,
-          available,
           brandId,
         },
       });
 
-      // PROBLEMA EN EJECUTARSE
       await this.resultCreateProductWithBranch({
         newProduct,
       });
+
       const code = `${newProduct.code} - ${newProduct.description}`;
 
       const qrCodeDataUrl = await QRcode.toDataURL(code);
@@ -178,52 +170,12 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
 
       return updatedProduct;
     } catch (error) {
-      throw error;
+      throw new RpcException({
+        message: `[CREATE_PRODUCTS] ${error.message}`,
+        status: HttpStatus.NOT_FOUND,
+      });
     }
   }
-
-  // async updateStock(updateStockDto: UpdateStockDto) {
-  //   try {
-  //     const { productId, stock, branchId } = updateStockDto;
-
-  //     // 1️⃣ Verificar producto
-  //     const product = await this.eProduct.findUnique({
-  //       where: { id: productId },
-  //     });
-  //     if (!product) {
-  //       throw new RpcException({
-  //         message: `Product with id ${productId} not found`,
-  //         status: HttpStatus.NOT_FOUND,
-  //       });
-  //     }
-
-  //     // 2️⃣ Emitir evento al microservicio de inventario o actualizar directamente
-  //     const response = await firstValueFrom(
-  //       this.client.send(
-  //         { cmd: 'emit_update_branch_stock' },
-  //         {
-  //           productId,
-  //           branchId,
-  //           stock,
-  //         },
-  //       ),
-  //     );
-
-  //     // 3️⃣ Retornar resultado (puede ser el producto actualizado o el resultado del evento)
-  //     return {
-  //       message: 'Stock actualizado correctamente',
-  //       productId,
-  //       branchId,
-  //       newStock: stock,
-  //       response,
-  //     };
-  //   } catch (error) {
-  //     throw new RpcException({
-  //       message: `[UPDATE-STOCK] ${error.message}`,
-  //       status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-  //     });
-  //   }
-  // }
 
   async generateQrsPdf(
     productsWithQty: { code: number; quantity: number }[],
@@ -635,43 +587,58 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    await this.findOne(id);
+    try {
+      let stocks: any[] = [];
+      const buscarProducto = await this.findOne(id);
 
-    const branches = await firstValueFrom(
-      this.client.send({ cmd: 'find_all_branches' }, {}),
-    );
+      const branches = await firstValueFrom(
+        this.client.send({ cmd: 'find_all_branches' }, {}),
+      );
 
-    // 🔁 Obtener los stocks de todas las sucursales
-    const stocks = await Promise.all(
-      branches.map(async (branch: any) => {
-        const existingStock = await firstValueFrom(
-          this.client.send(
-            { cmd: 'find_one_product_branch_id' },
-            { productId: id, branchId: branch.id },
-          ),
+      // 🔁 Obtener los stocks de todas las sucursales
+      try {
+        stocks = await Promise.all(
+          branches.map(async (branch: any) => {
+            const existingStock = await firstValueFrom(
+              this.client.send(
+                { cmd: 'find_one_product_branch_id' },
+                { productId: id, branchId: branch.id },
+              ),
+            );
+            return existingStock.stock;
+          }),
         );
-        return existingStock.stock;
-      }),
-    );
+      } catch (error) {
+        throw new RpcException({
+          message: `[UPDATE_PRODUCT] Producto no relacionado: ${error.message}`,
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+        });
+      }
 
-    const allZeroStock = stocks.every((stock) => stock === 0);
+      const allZeroStock = stocks.every((stock) => stock === 0);
 
-    // 💡 Si quiere deshabilitarlo (available = false), y hay stock > 0, lanzar error
-    if (updateProductDto.available === false && !allZeroStock) {
+      // 💡 Si quiere deshabilitarlo (available = false), y hay stock > 0, lanzar error
+      if (updateProductDto.available === false && !allZeroStock) {
+        throw new RpcException({
+          message:
+            'No se puede deshabilitar el producto porque hay stock disponible en alguna sucursal.',
+          status: HttpStatus.BAD_REQUEST,
+        });
+      }
+
+      // 📦 Actualizar normalmente
+      const { ...data } = updateProductDto;
+
+      return this.eProduct.update({
+        where: { id },
+        data,
+      });
+    } catch (error) {
       throw new RpcException({
-        message:
-          'No se puede deshabilitar el producto porque hay stock disponible en alguna sucursal.',
-        status: HttpStatus.BAD_REQUEST,
+        message: `[UPDATE_PRODUCT] No se pudo proceder con la ejecución ${error.message}`,
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
       });
     }
-
-    // 📦 Actualizar normalmente
-    const { ...data } = updateProductDto;
-
-    return this.eProduct.update({
-      where: { id },
-      data,
-    });
   }
 
   async searchProducts(paginationDto: PaginationDto) {
